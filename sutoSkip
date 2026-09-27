@@ -1,0 +1,92 @@
+// ==UserScript==
+// @name         YouTube Auto Skip Ads
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Tự động bấm nút "Bỏ qua quảng cáo" và tua nhanh quảng cáo không thể bỏ qua trên YouTube
+// @author       You
+// @match        https://www.youtube.com/*
+// @match        https://m.youtube.com/*
+// @grant        none
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const CHECK_INTERVAL = 300; // ms - tần suất kiểm tra
+    const originalTitle = document.title;
+
+    // Danh sách các selector nút "Bỏ qua quảng cáo" (YouTube hay đổi class/tên nên để nhiều lựa chọn)
+    const SKIP_BUTTON_SELECTORS = [
+        '.ytp-ad-skip-button',
+        '.ytp-ad-skip-button-modern',
+        '.ytp-skip-ad-button',
+        'button.ytp-ad-skip-button-modern',
+        '.ytp-ad-overlay-close-button'
+    ];
+
+    function clickIfExists(selectors) {
+        for (const sel of selectors) {
+            const btn = document.querySelector(sel);
+            if (btn) {
+                try {
+                    btn.click();
+                    console.log('[AutoSkipAds] Đã bấm:', sel);
+                    return true;
+                } catch (e) {
+                    console.warn('[AutoSkipAds] Lỗi khi bấm nút:', e);
+                }
+            }
+        }
+        return false;
+    }
+
+    function isAdPlaying() {
+        // YouTube gắn class "ad-showing" hoặc "ad-interrupting" lên player khi đang chạy quảng cáo
+        const player = document.querySelector('.html5-video-player');
+        if (!player) return false;
+        return (
+            player.classList.contains('ad-showing') ||
+            player.classList.contains('ad-interrupting')
+        );
+    }
+
+    function fastForwardAd() {
+        const video = document.querySelector('video');
+        if (!video) return;
+
+        // Với quảng cáo không thể bỏ qua: tua nhanh đến gần cuối để rút ngắn thời gian chờ
+        if (video.duration && isFinite(video.duration)) {
+            if (video.currentTime < video.duration - 0.3) {
+                video.currentTime = video.duration;
+            }
+        }
+
+        // Tắt tiếng trong lúc quảng cáo chạy (tùy chọn, có thể bỏ nếu không cần)
+        if (!video.muted) {
+            video.dataset.autoMuted = 'true';
+            video.muted = true;
+        }
+    }
+
+    function restoreSoundIfNeeded() {
+        const video = document.querySelector('video');
+        if (video && video.dataset.autoMuted === 'true' && !isAdPlaying()) {
+            video.muted = false;
+            delete video.dataset.autoMuted;
+        }
+    }
+
+    function mainLoop() {
+        if (isAdPlaying()) {
+            clickIfExists(SKIP_BUTTON_SELECTORS);
+            fastForwardAd();
+        } else {
+            restoreSoundIfNeeded();
+        }
+    }
+
+    setInterval(mainLoop, CHECK_INTERVAL);
+
+    console.log('[AutoSkipAds] Script đã khởi động, đang theo dõi quảng cáo YouTube...');
+})();
